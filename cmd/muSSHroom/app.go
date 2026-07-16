@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"  
 
 	textarea "charm.land/bubbles/v2/textarea" //imports textarea for text input
 	textinput "charm.land/bubbles/v2/textinput" //imports bubbles package for handling text input
@@ -53,7 +54,7 @@ func init(){
 	if err != nil {
 		log.Fatal(err)
 	}
-	vaultdir = fmt.Sprintf("%s/.vault", homedir)
+	vaultdir = filepath.Join(homedir, ".vault")
 }
 
 // init used for anything to be done before the app starts running
@@ -99,11 +100,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) { //returns new model st
 		case "enter":
 			filename := m.newfileinput.Value()
 			if filename != "" {
-				filepath := fmt.Sprintf("%s/%s.md", vaultdir, filename)
-				if _, err := os.Stat(filepath); err == nil {
+				fpath := filepath.Join(vaultdir, filename+".md")
+				if _, err := os.Stat(fpath); err == nil {
 					return m,nil
 				}
-				f, err := os.Create(filepath)
+				f, err := os.Create(fpath)
 				if err != nil {
 					log.Fatalf("%v",err)
 				}

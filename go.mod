@@ -1,4 +1,4 @@
-module charm.land/bubbletea/m/v2
+module github.com/homebrew-ec-foss/muSSHroom	
 
 go 1.26.4
 
