@@ -1,5 +1,5 @@
 build:
 	go build -o notesapp
 
-run: build
-	./notesapp
+run:
+	go run ./cmd/muSSHroom/app.go
