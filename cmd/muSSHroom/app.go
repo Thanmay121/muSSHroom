@@ -111,6 +111,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) { //returns new model st
 				m.currentFile = f 
 				m.textVisibility = false
 				m.newfileinput.SetValue("")
+				return m,nil
+				
 
 		}
 	}
