@@ -29,7 +29,7 @@ var ( //global variables, will add as we go
 			Background(gloss.Color("#1f0885")).
 			Padding(0, 2)
 
-	tabsRowStyle = gloss.NewStyle().
+	tabsRowStyle = gloss.NewStyle(). //tab border below the tabs
 			Border(gloss.NormalBorder(), false, false, true, false).
 			BorderForeground(gloss.Color("#d394fd")).
 			PaddingBottom(1)
@@ -38,11 +38,11 @@ var ( //global variables, will add as we go
 // model stores the app's CURRENT state
 type model struct { //one note
 	newfileinput   textinput.Model
-	newfilenames   []string
+	newfilenames   []string //list of filenames created with ctrl+N
 	textVisibility bool
 	currentFile    *os.File //type is a file pointer
 	notetextareas  []textarea.Model
-	activeTab      int
+	activeTab      int //stores info for currently active tab
 }
 
 // now we define what its INITIAL state is : Init function
@@ -61,15 +61,11 @@ func initialModel() model { //function that takes nothing and returns a struct
 	input.CharLimit = 80
 	input.SetWidth(80) // Updated to use the supported textinput width setter
 
-	// // text area model
-	// textArea := textarea.New()
-	// textArea.Placeholder = "Start you note !"
-	// textArea.Focus()
 	//the return statment
 	return model{
 		newfileinput:   input,
 		textVisibility: false,
-		// notetextareas:  []textarea.Model{textArea},
+		//rest of the struct members will have default values
 	}
 }
 
@@ -105,7 +101,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) { //returns new model st
 			return m, tea.Quit
 
 		case "ctrl+n": //to open a new tab
-			m.textVisibility = true
+			m.textVisibility = true //opens the input area for it to take the new filename
 			return m, nil
 
 		case "ctrl+h", "left": // Navigate left
@@ -113,35 +109,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) { //returns new model st
 				m.activeTab--
 			}
 			return m, nil
+
 		case "ctrl+l", "right": // Navigate right
 			if m.activeTab < len(m.notetextareas)-1 {
 				m.activeTab++
 			}
 			return m, nil
 
-		// case "ctrl+s":
-		// 	//saving data
-		// 	if m.currentFile == nil {
-		// 		break
-		// 	}
-		// 	if err := m.currentFile.Truncate(0); err != nil {
-		// 		fmt.Printf("Error saving file: %v\n", err)
-		// 		return m, nil
-		// 	}
-		// 	if _, err := m.currentFile.Seek(0, 0); err != nil {
-		// 		fmt.Printf("Error saving file: %v\n", err)
-		// 		return m, nil
-		// 	}
-		// 	if _, err := m.currentFile.WriteString(m.notetextareas[m.activeTab].Value()); err != nil {
-		// 		fmt.Printf("Error saving file: %v\n", err)
-		// 		return m, nil
-		// 	}
-		// 	if err := m.currentFile.Close(); err != nil {
-		// 		fmt.Printf("Error closing file: %v\n", err)
-		// 	}
-		// 	m.currentFile = nil
-		// 	m.notetextareas[m.activeTab].SetValue("")
-		// 	return m, nil
+		case "ctrl+s":
+			//saving data
+			if m.currentFile == nil {
+				break
+			}
+			if err := m.currentFile.Truncate(0); err != nil {
+				fmt.Printf("Error saving file: %v\n", err)
+				return m, nil
+			}
+			if _, err := m.currentFile.Seek(0, 0); err != nil {
+				fmt.Printf("Error saving file: %v\n", err)
+				return m, nil
+			}
+			if _, err := m.currentFile.WriteString(m.notetextareas[m.activeTab].Value()); err != nil {
+				fmt.Printf("Error saving file: %v\n", err)
+				return m, nil
+			}
+			if err := m.currentFile.Close(); err != nil {
+				fmt.Printf("Error closing file: %v\n", err)
+			}
+			m.currentFile = nil
+			m.notetextareas[m.activeTab].SetValue("")
+			return m, nil
 
 		case "enter":
 
@@ -158,11 +155,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) { //returns new model st
 				}
 
 				m.currentFile = f
-				m.textVisibility = false //removes the filename input box
-				m.newfilenames = append(m.newfilenames, filename)
-				m.newfileinput.SetValue("") //sets the filename inputbox back to null
+				m.textVisibility = false                          //closes the filename input box
+				m.newfilenames = append(m.newfilenames, filename) //adds it to the array of filenames in model
+				m.newfileinput.SetValue("")                       //sets the filename inputbox back to null
 
-				textArea := textarea.New()
+				textArea := textarea.New() //opens new text area for that specific file
 				textArea.Placeholder = "Write your notes here..."
 				textArea.Focus()
 
@@ -187,12 +184,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) { //returns new model st
 }
 
 func (m model) View() tea.View { //whatever is model, it returns a tea.View i.e. the UI we need
-	var style = gloss.NewStyle().
-		Bold(true).
-		Foreground(gloss.Color("#FAFAFA")).
-		Background(gloss.Color("#7D56F4")).
-		PaddingLeft(4). //for extending the text block a little more
-		PaddingRight(4)
+
+	var style = gloss.NewStyle(). //style for the header
+					Bold(true).
+					Foreground(gloss.Color("#FAFAFA")).
+					Background(gloss.Color("#7D56F4")).
+					PaddingLeft(4). //for extending the text block a little more
+					PaddingRight(4)
 
 	welc := style.Render("Welcome to BubbleTea Cafe! 🧋") //the very first title of the app
 
@@ -202,7 +200,7 @@ func (m model) View() tea.View { //whatever is model, it returns a tea.View i.e.
 
 	if m.textVisibility {
 		view = m.newfileinput.View()
-	} else if m.currentFile != nil {
+	} else if m.currentFile != nil { //its either filename or file so added elseif
 		view = m.notetextareas[m.activeTab].View()
 	}
 
@@ -217,7 +215,7 @@ func (m model) View() tea.View { //whatever is model, it returns a tea.View i.e.
 			tabs = append(tabs, tabStyle.Render(title))
 		}
 	}
-	renderedTabs := tabsRowStyle.Render(strings.Join(tabs, "")) //joining ass rendered tabs together
+	renderedTabs := tabsRowStyle.Render(strings.Join(tabs, "")) //joining all rendered tabs together
 
 	s := fmt.Sprintf("\n%s\n\n%s\n\n%s\n\n%s", welc, renderedTabs, view, help) //returns the fmt specified string
 	return tea.NewView(s)                                                      //right now returns whatever is in the model
