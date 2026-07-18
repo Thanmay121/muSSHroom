@@ -1,4 +1,4 @@
-module github.com/homebrew-ec-foss/muSSHroom	
+module github.com/homebrew-ec-foss/muSSHroom
 
 go 1.26.4
 
