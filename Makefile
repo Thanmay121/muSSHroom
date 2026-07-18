@@ -1,5 +1,3 @@
-build:
-	go build -o notesapp
 
 run: 
-	./notesapp
+	go run src/myapp/app.go
