@@ -200,6 +200,11 @@ func (m model) View() tea.View { //whatever is model, it returns a tea.View i.e.
 
 	if m.textVisibility {
 		view = m.newfileinput.View()
+
+		if len(m.notetextareas) > 0 {
+			m.notetextareas[m.activeTab].Blur()
+		}
+
 	} else if m.currentFile != nil { //its either filename or file so added elseif
 		view = m.notetextareas[m.activeTab].View()
 	}

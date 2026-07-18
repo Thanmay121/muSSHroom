@@ -1,4 +1,4 @@
-# BubbleTea Cafe : A notes app written in Go
+# 🧋 BubbleTea Cafe : A notes app written in Go
 
 A notes app implemented with components from the charm library like bubbletea, bubbles and lipgloss for a very basic UI
 
