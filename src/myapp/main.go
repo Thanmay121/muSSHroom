@@ -46,9 +46,19 @@ var ( //all global variables, styles grouped together
 )
 
 func main() {
+	//filepath := os.Getenv("SSH_HOST_KEY_PATH")
+	// Retrieve raw string data (e.g., from container/cloud env)
+
+	// Retrieve the host key file path from the environment
+	keyPath := os.Getenv("SSH_HOST_KEY_PATH")
+	if keyPath == "" {
+		// Fallback to a default path if the environment variable isn't set
+		keyPath = ".ssh/id_ed25519"
+	}
+
 	s, err := wish.NewServer( //new server with the name s
 		wish.WithAddress(net.JoinHostPort(host, port)),
-		wish.WithHostKeyPath(".ssh/id_ed25519"), //path for SSH keys
+		wish.WithHostKeyPath(keyPath), //path for SSH keys
 		wish.WithMiddleware( //including the required middleware
 			bubbletea.Middleware(teaHandler), //the bubbletea middleware requires a TeaHandler fn
 			activeterm.Middleware(),          // Bubble Tea apps usually require a PTY.
