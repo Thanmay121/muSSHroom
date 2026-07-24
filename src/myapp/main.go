@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -50,10 +51,6 @@ var (
 	messageStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("255"))
 
-	usernameStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("141"))
-
 	sessions   = make([]*userSession, 0) //global slice of all connected users
 	sessionsMu sync.Mutex                //mutex to protect sessions slice from race conditions, ensures each user gets added one by one
 )
@@ -78,6 +75,10 @@ func broadcast(msg chatMsg) {
 	for _, s := range sessions {
 		s.program.Send(msg)
 	}
+}
+
+func userSysMsg(s *userSession, msg chatMsg) { //for when they use slash commands, so that it only appears on their screen
+	s.program.Send(msg)
 }
 
 // addSession safely adds a new user session to the global slice
@@ -202,6 +203,7 @@ type model struct {
 	usernameInput textinput.Model //input box for username entry
 	messageInput  textinput.Model //input box for chat messages
 	messages      []chatMsg       //history of all received messages
+	usernameStyle lipgloss.Style
 	width         int
 	height        int
 }
@@ -229,6 +231,9 @@ func initialModel(sess *userSession, width, height int) model { //model state wh
 		messages:      []chatMsg{},
 		width:         width,
 		height:        height,
+		usernameStyle: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("141")),
 	}
 }
 
@@ -271,7 +276,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				//broadcast join message to everyone
 				go broadcast(chatMsg{ //goroutine
-					text:   fmt.Sprintf("%s joined the chat", username),
+					text:   fmt.Sprintf("🍄 %s joined the chat", username),
 					system: true,
 				})
 				return m, nil
@@ -282,7 +287,79 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if text == "" { //if input is nothing skip and do nothing
 					return m, nil
 				}
+
+				// detecting slash commands
+				if strings.HasPrefix(text, "/") {
+					parts := strings.SplitN(text, " ", 2) //splits it into "/command" and "args"
+					command := parts[0]                   //name of command like 'help'
+					args := ""
+
+					if len(parts) > 1 { //i.e the args to the commands like COLOR in /usercolor
+						args = parts[1]
+					}
+
+					switch command { //to see which command is entered and send a user sysmsg to their session accordingly
+
+					case "/help":
+						go userSysMsg(m.sess, chatMsg{ //broadcasts a system message only to user
+							text:   "🍄 available commands : /help /user /emoji /colors /quit /usercolor COLOR",
+							system: true})
+						m.messageInput.SetValue("")
+
+					case "/user":
+						m.currentScreen = usernameScreen //switches to username screen
+						m.messageInput.Blur()
+						m.usernameInput.Focus()
+						m.messageInput.SetValue("")
+
+					case "/emoji":
+						go userSysMsg(m.sess, chatMsg{ //broadcasts a system message only to user
+							text:   "🍄 available emojis : 😂 😭 ☺️ 🐮 🍄",
+							system: true})
+						m.messageInput.SetValue("")
+
+					case "/colors":
+						go userSysMsg(m.sess, chatMsg{ //broadcasts a system message only to user
+							text:   "🍄 available username colors : red blue pink purple",
+							system: true})
+						m.messageInput.SetValue("")
+
+					case "/usercolor":
+
+						switch args {
+
+						case "red":
+							m.usernameStyle = m.usernameStyle.Bold(true).Foreground(lipgloss.Color("196"))
+
+						case "blue":
+							m.usernameStyle = m.usernameStyle.Bold(true).Foreground(lipgloss.Color("20"))
+
+						case "pink":
+							m.usernameStyle = m.usernameStyle.Bold(true).Foreground(lipgloss.Color("219"))
+
+						case "purple":
+							m.usernameStyle = m.usernameStyle.Bold(true).Foreground(lipgloss.Color("141"))
+						}
+						m.messageInput.SetValue("")
+						go userSysMsg(m.sess, chatMsg{ //broadcasts a system message
+							text:   fmt.Sprintf("🍄 username color changed to : %s", args),
+							system: true})
+
+					case "/quit":
+						return m, tea.Quit
+
+					default:
+						go userSysMsg(m.sess, chatMsg{ //broadcasts a system message
+							text:   "🍄 unknown command : use /help to know more",
+							system: true})
+
+					}
+
+					return m, nil
+				}
+
 				m.messageInput.SetValue("") //once message broadcasted set the box empty
+
 				//broadcast the message to all users
 				go broadcast(chatMsg{ //goroutine to broadcast the message to all channels
 					username: m.sess.username,
@@ -315,12 +392,12 @@ func (m model) View() tea.View {
 func (m model) usernameView() tea.View {
 	welc := headerStyle.Render("Welcome To")
 	mussh := musshStyle.Render(`
-         ___  ___  _ _                        
+             ___  ___  _ _                        
  _ _ _  _ _ / __]/ __]| | | _ _  ___  ___  _ _ _  
 | ' ' || | |\__ \\__ \|   || '_]/ . \/ . \| ' ' |
 |_|_|_| \__|[___/[___/|_|_||_|  \___/\___/|_|_|_|`)
 
-	prompt := welcStyle.Render("Choose a username to join the chat:")
+	prompt := welcStyle.Render("🍄 Choose a username to join the chat:")
 	s := fmt.Sprintf("\n%s%s\n\n%s\n\n%s\n", welc, mussh, prompt, m.usernameInput.View())
 	return tea.NewView(s)
 }
@@ -329,7 +406,7 @@ func (m model) usernameView() tea.View {
 func (m model) chatView() tea.View {
 	welc := headerStyle.Render("Welcome To")
 	mussh := musshStyle.Render(`
-         ___  ___  _ _                        
+             ___  ___  _ _                        
  _ _ _  _ _ / __]/ __]| | | _ _  ___  ___  _ _ _  
 | ' ' || | |\__ \\__ \|   || '_]/ . \/ . \| ' ' |
 |_|_|_| \__|[___/[___/|_|_||_|  \___/\___/|_|_|_|`)
@@ -343,11 +420,11 @@ func (m model) chatView() tea.View {
 		if msg.system {
 			msgLines += systemStyle.Render("* "+msg.text) + "\n"
 		} else {
-			msgLines += usernameStyle.Render(msg.username+": ") + messageStyle.Render(msg.text) + "\n"
+			msgLines += m.usernameStyle.Render(msg.username+": ") + messageStyle.Render(msg.text) + "\n"
 		}
 	}
 
-	help := "enter : send | ctrl+c : quit"
+	help := "/help for commands | enter : send | ctrl+c or /quit : exit chat"
 
 	s := fmt.Sprintf("\n%s%s\n\n%s\n%s\n\n%s\n%s\n%s",
 		welc, mussh, welcmsg, border, msgLines, m.messageInput.View(), help)
