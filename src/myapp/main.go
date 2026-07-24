@@ -273,6 +273,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.currentScreen = chatScreen //take them to the chat screen
 				m.messageInput.Focus()       //taking cursor to chat and away from username input text box
 				m.usernameInput.Blur()
+				m.usernameInput.SetValue("")
 
 				//broadcast join message to everyone
 				go broadcast(chatMsg{ //goroutine
