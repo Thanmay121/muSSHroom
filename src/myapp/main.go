@@ -332,7 +332,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.usernameStyle = m.usernameStyle.Bold(true).Foreground(lipgloss.Color("196"))
 
 						case "blue":
-							m.usernameStyle = m.usernameStyle.Bold(true).Foreground(lipgloss.Color("20"))
+							m.usernameStyle = m.usernameStyle.Bold(true).Foreground(lipgloss.Color("51"))
 
 						case "pink":
 							m.usernameStyle = m.usernameStyle.Bold(true).Foreground(lipgloss.Color("219"))
