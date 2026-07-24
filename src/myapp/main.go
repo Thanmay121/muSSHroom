@@ -34,22 +34,22 @@ const (
 var (
 	headerStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("199"))
+			Foreground(lipgloss.Color("199")) //hot pink
 
 	musshStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("51"))
+			Foreground(lipgloss.Color("51")) //cyan
 
 	welcStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("99"))
+			Foreground(lipgloss.Color("99")) //purple
 
 	systemStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("104"))
+			Foreground(lipgloss.Color("104")) //light purple
 
 	messageStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("255"))
+			Foreground(lipgloss.Color("255")) //white
 
 	sessions   = make([]*userSession, 0) //global slice of all connected users
 	sessionsMu sync.Mutex                //mutex to protect sessions slice from race conditions, ensures each user gets added one by one
@@ -330,16 +330,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						switch args {
 
 						case "red":
-							m.usernameStyle = m.usernameStyle.Bold(true).Foreground(lipgloss.Color("196"))
+							m.usernameStyle = m.usernameStyle.Bold(true).Foreground(lipgloss.Color("196")) //red
 
 						case "blue":
-							m.usernameStyle = m.usernameStyle.Bold(true).Foreground(lipgloss.Color("51"))
+							m.usernameStyle = m.usernameStyle.Bold(true).Foreground(lipgloss.Color("51")) //cyan
 
 						case "pink":
-							m.usernameStyle = m.usernameStyle.Bold(true).Foreground(lipgloss.Color("219"))
+							m.usernameStyle = m.usernameStyle.Bold(true).Foreground(lipgloss.Color("219")) //pink
 
 						case "purple":
-							m.usernameStyle = m.usernameStyle.Bold(true).Foreground(lipgloss.Color("141"))
+							m.usernameStyle = m.usernameStyle.Bold(true).Foreground(lipgloss.Color("141")) //purple
 						}
 						m.messageInput.SetValue("")
 						go userSysMsg(m.sess, chatMsg{ //broadcasts a system message
