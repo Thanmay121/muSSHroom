@@ -46,7 +46,7 @@ var (
 
 	systemStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("214"))
+			Foreground(lipgloss.Color("104"))
 
 	messageStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("255"))
