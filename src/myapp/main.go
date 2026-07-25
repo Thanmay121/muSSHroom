@@ -6,14 +6,15 @@ import (
 	"fmt"
 	"net"
 	"os"
-  "sync"
 	"os/signal"
+	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	//UI
-	tea "charm.land/bubbletea/v2"
 	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
 
 	//wish SSH server packages
@@ -45,17 +46,13 @@ var (
 
 	systemStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("214")) //orange
+			Foreground(lipgloss.Color("104")) //light purple
 
 	messageStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("255")) //white
 
-	usernameStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("141")) //light purple
-
 	sessions   = make([]*userSession, 0) //global slice of all connected users
-	sessionsMu sync.Mutex                //mutex to protect sessions slice from race conditions
+	sessionsMu sync.Mutex                //mutex to protect sessions slice from race conditions, ensures each user gets added one by one
 )
 
 // stores each connected user's program reference and username
@@ -64,7 +61,7 @@ type userSession struct {
 	program  *tea.Program
 }
 
-//  message type that gets broadcast to all users
+// message type that gets broadcast to all users
 type chatMsg struct {
 	username string
 	text     string
@@ -74,10 +71,14 @@ type chatMsg struct {
 // broadcast sends a chatMsg to every connected user's program
 func broadcast(msg chatMsg) {
 	sessionsMu.Lock()
-	defer sessionsMu.Unlock()
+	defer sessionsMu.Unlock() //defer waits for the function to finish executing and then executes, even if there's an error
 	for _, s := range sessions {
 		s.program.Send(msg)
 	}
+}
+
+func userSysMsg(s *userSession, msg chatMsg) { //for when they use slash commands, so that it only appears on their screen
+	s.program.Send(msg)
 }
 
 // addSession safely adds a new user session to the global slice
@@ -100,12 +101,15 @@ func removeSession(s *userSession) {
 }
 
 func main() {
-	keyPath := os.Getenv("SSH_HOST_KEY_PATH")  
+
+	//setting SSH host key path
+	keyPath := os.Getenv("SSH_HOST_KEY_PATH")
 	if keyPath == "" {
 		keyPath = ".ssh/id_ed25519"
 	}
 
-	s, err := wish.NewServer(
+	//setting up the server
+	serv, err := wish.NewServer(
 		wish.WithAddress(net.JoinHostPort(host, port)),
 		wish.WithHostKeyPath(keyPath),
 		wish.WithMiddleware(
@@ -118,40 +122,45 @@ func main() {
 		log.Error("Could not start server", "error", err)
 	}
 
-	done := make(chan os.Signal, 1)
-	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)  //ctrl+c to end the server
-	log.Info("Starting SSH chat server", "host", host, "port", port)    //start up info
+	//done channel is meant for catching signals to stop the server
+	done := make(chan os.Signal, 1)                                    //makes a channel which is an interface to get access to incoming signals
+	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM) //ctrl+c to end the server , sigint means signal interrupt i.e. ctrl+c
+	log.Info("Starting SSH chat server", "host", host, "port", port)   //start up info
 
-	go func() {           // error handling for server start up
-		if err = s.ListenAndServe(); err != nil && !errors.Is(err, ssh.ErrServerClosed) {
+	go func() { // error handling for server start up
+		if err = serv.ListenAndServe(); err != nil && !errors.Is(err, ssh.ErrServerClosed) {
 			log.Error("Could not start server", "error", err)
-			done <- nil
+			done <- nil //if it couldn't start the interface is removed, set to null
 		}
 	}()
 
 	<-done
 	log.Info("Stopping SSH chat server")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+
 	defer func() { cancel() }()
-	if err := s.Shutdown(ctx); err != nil && !errors.Is(err, ssh.ErrServerClosed) {
+
+	if err := serv.Shutdown(ctx); err != nil && !errors.Is(err, ssh.ErrServerClosed) {
 		log.Error("Could not stop server", "error", err)
 	}
 }
 
-// myMiddleware uses MiddlewareWithProgramHandler so we get access to *tea.Program
+/*------------------------for EACH user's tea.Program--------------------------------------*/
+// myMiddleware uses MiddlewareWithProgramHandler so we get access to *tea.Program pointer
 // which we need to call p.Send() for broadcasting messages to each user
 func myMiddleware() wish.Middleware {
 	teaHandler := func(s ssh.Session) *tea.Program {
-		pty, _, active := s.Pty()
+		pty, _, active := s.Pty() //sets up the connection for serving bubbletea app on server
+
 		if !active {
 			wish.Fatalln(s, "no active terminal, ending")
 			return nil
 		}
 
-		sess := &userSession{}                               //create a new user session for this connection
+		sess := &userSession{}                                       //create a new user session for this connection
 		m := initialModel(sess, pty.Window.Width, pty.Window.Height) //create a new model for this user session
-		p := tea.NewProgram(m, bubbletea.MakeOptions(s)...)    //create a new bubbletea program for this user session
-		sess.program = p 
+		p := tea.NewProgram(m, bubbletea.MakeOptions(s)...)          //create a new bubbletea program for this user session
+		sess.program = p
 
 		//add session to global slice when user connects
 		addSession(sess)
@@ -162,10 +171,10 @@ func myMiddleware() wish.Middleware {
 			if sess.username != "" {
 				broadcast(chatMsg{
 					text:   fmt.Sprintf("%s left the chat", sess.username),
-					system: true,
+					system: true, //to make it a system message
 				})
 			}
-			removeSession(sess)
+			removeSession(sess) //removes the user from client list
 		}()
 
 		return p
@@ -183,22 +192,24 @@ func myMiddleware() wish.Middleware {
 type screen int
 
 const (
-	usernameScreen screen = iota //iota is basically enumaration
-	chatScreen                   //
+	usernameScreen screen = iota //iota is basically enumeration - 0
+	chatScreen                   // 1
 )
 
 // model stores the current state of the app for each connected user
 type model struct {
 	sess          *userSession
-	currentScreen screen
+	currentScreen screen          //info of which screen the user is on, user or chat screen (use in rooms later)
 	usernameInput textinput.Model //input box for username entry
 	messageInput  textinput.Model //input box for chat messages
 	messages      []chatMsg       //history of all received messages
+	usernameStyle lipgloss.Style
 	width         int
 	height        int
 }
 
-func initialModel(sess *userSession, width, height int) model {
+func initialModel(sess *userSession, width, height int) model { //model state when user first enters in
+
 	//username input setup
 	unInput := textinput.New()
 	unInput.Placeholder = "enter your username"
@@ -220,6 +231,9 @@ func initialModel(sess *userSession, width, height int) model {
 		messages:      []chatMsg{},
 		width:         width,
 		height:        height,
+		usernameStyle: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("141")),
 	}
 }
 
@@ -237,7 +251,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		return m, nil
 
-	case chatMsg: //a broadcast message arrived, append to history
+	case chatMsg: //a broadcast message arrived, append to chat history array
 		m.messages = append(m.messages, msg)
 		return m, nil
 
@@ -249,33 +263,107 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "enter":
-			if m.currentScreen == usernameScreen {
+			if m.currentScreen == usernameScreen { //i.e. screen where they enter username
 				username := m.usernameInput.Value()
 				if username == "" {
 					return m, nil
 				}
 				//set username on the session so broadcast can use it
 				m.sess.username = username
-				m.currentScreen = chatScreen
-				m.messageInput.Focus()
-				m.usernameInput.Blur()  
+				m.currentScreen = chatScreen //take them to the chat screen
+				m.messageInput.Focus()       //taking cursor to chat and away from username input text box
+				m.usernameInput.Blur()
+				m.usernameInput.SetValue("")
+
 				//broadcast join message to everyone
-				go broadcast(chatMsg{
-					text:   fmt.Sprintf("%s joined the chat", username),
+				go broadcast(chatMsg{ //goroutine
+					text:   fmt.Sprintf("🍄 %s joined the chat", username),
 					system: true,
 				})
 				return m, nil
 			}
 
-			if m.currentScreen == chatScreen {
+			if m.currentScreen == chatScreen { //if user is on chatscreen and hit enter
 				text := m.messageInput.Value()
-				if text == "" {                                //if input is nothing skip
+				if text == "" { //if input is nothing skip and do nothing
 					return m, nil
 				}
-				m.messageInput.SetValue("")
+
+				// detecting slash commands
+				if strings.HasPrefix(text, "/") {
+					parts := strings.SplitN(text, " ", 2) //splits it into "/command" and "args"
+					command := parts[0]                   //name of command like 'help'
+					args := ""
+
+					if len(parts) > 1 { //i.e the args to the commands like COLOR in /usercolor
+						args = parts[1]
+					}
+
+					switch command { //to see which command is entered and send a user sysmsg to their session accordingly
+
+					case "/help":
+						go userSysMsg(m.sess, chatMsg{ //broadcasts a system message only to user
+							text:   "🍄 available commands : /help /user /emoji /colors /quit /usercolor COLOR",
+							system: true})
+						m.messageInput.SetValue("")
+
+					case "/user":
+						m.currentScreen = usernameScreen //switches to username screen
+						m.messageInput.Blur()
+						m.usernameInput.Focus()
+						m.messageInput.SetValue("")
+
+					case "/emoji":
+						go userSysMsg(m.sess, chatMsg{ //broadcasts a system message only to user
+							text:   "🍄 available emojis : 😂 😭 ☺️ 🐮 🍄",
+							system: true})
+						m.messageInput.SetValue("")
+
+					case "/colors":
+						go userSysMsg(m.sess, chatMsg{ //broadcasts a system message only to user
+							text:   "🍄 available username colors : red blue pink purple",
+							system: true})
+						m.messageInput.SetValue("")
+
+					case "/usercolor":
+
+						switch args {
+
+						case "red":
+							m.usernameStyle = m.usernameStyle.Bold(true).Foreground(lipgloss.Color("196")) //red
+
+						case "blue":
+							m.usernameStyle = m.usernameStyle.Bold(true).Foreground(lipgloss.Color("51")) //cyan
+
+						case "pink":
+							m.usernameStyle = m.usernameStyle.Bold(true).Foreground(lipgloss.Color("219")) //pink
+
+						case "purple":
+							m.usernameStyle = m.usernameStyle.Bold(true).Foreground(lipgloss.Color("141")) //purple
+						}
+						m.messageInput.SetValue("")
+						go userSysMsg(m.sess, chatMsg{ //broadcasts a system message
+							text:   fmt.Sprintf("🍄 username color changed to : %s", args),
+							system: true})
+
+					case "/quit":
+						return m, tea.Quit
+
+					default:
+						go userSysMsg(m.sess, chatMsg{ //broadcasts a system message
+							text:   "🍄 unknown command : use /help to know more",
+							system: true})
+
+					}
+
+					return m, nil
+				}
+
+				m.messageInput.SetValue("") //once message broadcasted set the box empty
+
 				//broadcast the message to all users
-				go broadcast(chatMsg{
-					username: m.sess.username,            
+				go broadcast(chatMsg{ //goroutine to broadcast the message to all channels
+					username: m.sess.username,
 					text:     text,
 					system:   false,
 				})
@@ -305,12 +393,12 @@ func (m model) View() tea.View {
 func (m model) usernameView() tea.View {
 	welc := headerStyle.Render("Welcome To")
 	mussh := musshStyle.Render(`
-         ___  ___  _ _                        
+             ___  ___  _ _                        
  _ _ _  _ _ / __]/ __]| | | _ _  ___  ___  _ _ _  
 | ' ' || | |\__ \\__ \|   || '_]/ . \/ . \| ' ' |
 |_|_|_| \__|[___/[___/|_|_||_|  \___/\___/|_|_|_|`)
 
-	prompt := welcStyle.Render("Choose a username to join the chat:")
+	prompt := welcStyle.Render("🍄 Choose a username to join the chat:")
 	s := fmt.Sprintf("\n%s%s\n\n%s\n\n%s\n", welc, mussh, prompt, m.usernameInput.View())
 	return tea.NewView(s)
 }
@@ -319,7 +407,7 @@ func (m model) usernameView() tea.View {
 func (m model) chatView() tea.View {
 	welc := headerStyle.Render("Welcome To")
 	mussh := musshStyle.Render(`
-         ___  ___  _ _                        
+             ___  ___  _ _                        
  _ _ _  _ _ / __]/ __]| | | _ _  ___  ___  _ _ _  
 | ' ' || | |\__ \\__ \|   || '_]/ . \/ . \| ' ' |
 |_|_|_| \__|[___/[___/|_|_||_|  \___/\___/|_|_|_|`)
@@ -333,11 +421,11 @@ func (m model) chatView() tea.View {
 		if msg.system {
 			msgLines += systemStyle.Render("* "+msg.text) + "\n"
 		} else {
-			msgLines += usernameStyle.Render(msg.username+": ") + messageStyle.Render(msg.text) + "\n"
+			msgLines += m.usernameStyle.Render(msg.username+": ") + messageStyle.Render(msg.text) + "\n"
 		}
 	}
 
-	help := "enter : send | ctrl+c : quit"
+	help := "/help for commands | enter : send | ctrl+c or /quit : exit chat"
 
 	s := fmt.Sprintf("\n%s%s\n\n%s\n%s\n\n%s\n%s\n%s",
 		welc, mussh, welcmsg, border, msgLines, m.messageInput.View(), help)
