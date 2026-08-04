@@ -125,7 +125,7 @@ func userSysMsg(s *userSession, msg chatMsg) { //for when they use slash command
 func addSession(s *userSession) {
 	sessionsMu.Lock()
 	defer sessionsMu.Unlock()
-	sessions[s.username] = s
+    sessions[s.username] = s
 }
 
 // removeSession safely removes a user session when they disconnect
@@ -183,6 +183,7 @@ func main() {
 	)
 	if err != nil {
 		log.Error("Could not start server", "error", err)
+		os.Exit(1)
 	}
 
 	//done channel is meant for catching signals to stop the server
@@ -225,6 +226,7 @@ func myMiddleware() wish.Middleware {
 		p := tea.NewProgram(m, bubbletea.MakeOptions(s)...)          //create a new bubbletea program for this user session
 		sess.program = p
 
+
 		//remove session and broadcast disconnect message when user disconnects
 		go func() {
 			<-s.Context().Done()
@@ -264,10 +266,10 @@ type model struct {
 	messageInput  textinput.Model //input box for chat messages
 	tabs          []tabEntry      //amount of tabs
 	activeTab     int             //current tab
-	usernameStyle lipgloss.Style
+	usernameStyle lipgloss.Style  
 	width         int
 	height        int
-	err           string //error message for username taken
+	err		   string          //error message for username taken
 }
 
 func initialModel(sess *userSession, width, height int) model { //model state when user first enters in
@@ -369,6 +371,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.usernameInput.Blur()
 				m.usernameInput.SetValue("")
 				sessions[username] = m.sess
+			
 
 				//broadcast join message to everyone
 				go broadcast(chatMsg{ //goroutine
@@ -387,7 +390,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// detecting slash commands
 				if strings.HasPrefix(text, "/") {
 					parts := strings.SplitN(text, " ", 2) //splits it into "/command" and "args"
-					command := parts[0]                   //name of command like 'help'
+					command := parts[0]                    //name of command like 'help'
 					args := ""
 
 					if len(parts) > 1 { //i.e the args to the commands like COLOR in /usercolor
