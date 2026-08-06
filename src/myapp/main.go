@@ -136,10 +136,10 @@ func removeSession(s *userSession) {
 }
 
 // createRoom makes a new room, adds members, and sends roomInviteMsg to each
-func createRoom(creator *userSession, targetUsernames []string) {
+func createRoom(rname string, creator *userSession, targetUsernames []string) {
 	roomsMu.Lock()
 	roomCounter++
-	id := fmt.Sprintf("room-number-%d", roomCounter)
+	id := rname
 	r := &room{
 		id:      id,
 		members: make(map[string]*userSession),
@@ -164,6 +164,7 @@ func createRoom(creator *userSession, targetUsernames []string) {
 }
 
 func main() {
+	os.Setenv("FORCE_COLOR", "1")
 
 	//setting SSH host key path
 	keyPath := os.Getenv("SSH_HOST_KEY_PATH")
@@ -340,7 +341,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c":
 			return m, tea.Quit
 
-		case "tab": //go to next
+		case "tab": //go to next tab
 			m.activeTab = (m.activeTab + 1) % len(m.tabs)
 			return m, nil
 
@@ -412,7 +413,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							//broadcast the sys message to user in their respective room
 							go userSysMsg(m.sess, chatMsg{
 								roomID: activeRoom.id,
-								text:   "🍄 available commands : /help /user /emoji /colors /quit /usercolor COLOR /room USER1 USER2...",
+								text:   "🍄 slash commands : /help /user /emoji /colors /quit /usercolor COLOR /room RNAME USER1 USER2...",
 								system: true})
 						}
 
@@ -433,7 +434,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							go userSysMsg(m.sess, chatMsg{ //broadcasts a system message only to user
 								roomID: "",
 								text: `
-🍄 here's emoji's you can access quickly, first select the one you want
+🍄 Use shortcode notation, or here's emoji's you can access quickly, first select the one you want
 ctrl+shift+c --> ctrl+shift+v into your message box
 😂 😭 ☺️ 🐮 🍄 🤡 🥀 🌈 🔥 🍩 ❤️ ‼️ 👍
 WARNING: DO NOT CTRL+C`,
@@ -443,7 +444,7 @@ WARNING: DO NOT CTRL+C`,
 							go userSysMsg(m.sess, chatMsg{ //broadcasts a system message only to user
 								roomID: activeRoom.id,
 								text: `
-🍄 here's emoji's you can access quickly, first select the one you want
+🍄 Use shortcode notation, or here's emoji's you can access quickly, first select the one you want
 ctrl+shift+c --> ctrl+shift+v into your message box
 😂 😭 ☺️ 🐮 🍄 🤡 🥀 🌈 🔥 🍩 ❤️ ‼️ 👍
 WARNING: DO NOT CTRL+C`,
@@ -514,7 +515,8 @@ WARNING: DO NOT CTRL+C`,
 							}
 							//creates room if args are valid users
 							targetUsernames := strings.Fields(args)
-							go createRoom(m.sess, targetUsernames)
+							roomname := targetUsernames[0]
+							go createRoom(roomname, m.sess, targetUsernames[1:])
 							m.messageInput.SetValue("")
 
 						} else { //incase it's inside a room we dont want them to create a room from here for neatness purpose lmao
@@ -551,7 +553,21 @@ WARNING: DO NOT CTRL+C`,
 				}
 
 				m.messageInput.SetValue("") //once message broadcasted set the box empty
-
+				text = strings.ReplaceAll(text, ":sob:", "😭")
+				text = strings.ReplaceAll(text, ":joy:", "😂")
+				text = strings.ReplaceAll(text, ":relaxed:", "☺️")
+				text = strings.ReplaceAll(text, ":cow:", "🐮")
+				text = strings.ReplaceAll(text, ":mushroom:", "🍄")
+				text = strings.ReplaceAll(text, ":clown:", "🤡")
+				text = strings.ReplaceAll(text, ":wilted_flower:", "🥀")
+				text = strings.ReplaceAll(text, ":wilted_rose:", "🥀")
+				text = strings.ReplaceAll(text, ":rainbow:", "🌈")
+				text = strings.ReplaceAll(text, ":fire:", "🔥")
+				text = strings.ReplaceAll(text, ":doughnut:", "🍩")
+				text = strings.ReplaceAll(text, ":heart:", "❤️")
+				text = strings.ReplaceAll(text, ":bangbang:", "‼️")
+				text = strings.ReplaceAll(text, ":thumbsup:", "👍")
+				text = strings.ReplaceAll(text, ":+1:", "👍")
 				activeRoom := m.tabs[m.activeTab].r
 				if activeRoom == nil {
 					//this cases means that user wants to send a global mesg
