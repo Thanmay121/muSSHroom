@@ -105,13 +105,13 @@ type tabEntry struct {
 	messages []chatMsg
 }
 
-// broadcast sends a chatMsg to every connected user's program
-func broadcast(msg chatMsg) {
-	sessionsMu.Lock()
-	defer sessionsMu.Unlock() //defer waits for the function to finish executing and then executes, even if there's an error
-	for _, s := range sessions {
-		s.program.Send(msg)
-	}
+	// broadcast sends a chatMsg to every connected user's program
+	func broadcast(msg chatMsg) {
+		sessionsMu.Lock()
+		defer sessionsMu.Unlock() //defer waits for the function to finish executing and then executes, even if there's an error
+		for _, s := range sessions {
+			s.program.Send(msg)
+		}
 }
 
 // broadcastToRoom sends a chatMsg to every member of a room
