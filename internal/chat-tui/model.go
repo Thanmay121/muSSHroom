@@ -197,7 +197,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.MessageInput.SetValue("")
 						activeRoom := m.Tabs[m.ActiveTab].r
 						if activeRoom == nil {
-							go UserSysMsg(m.Sess, ChatMsg{RoomID: "", Text: "🍄 slash commands : /help /user /emoji /colors /quit /usercolor COLOR /room USER1 USER2... /deleteroom", System: true})
+							go UserSysMsg(m.Sess, ChatMsg{RoomID: "", Text: "🍄 slash commands : /help /user /emoji /colors /quit /usercolor COLOR /room RNAME USER1 USER2... /deleteroom", System: true})
 						} else {
 							go UserSysMsg(m.Sess, ChatMsg{RoomID: activeRoom.ID, Text: "🍄 slash commands : /help /user /emoji /colors /quit /usercolor COLOR /room RNAME USER1 USER2... /deleteroom", System: true})
 						}
