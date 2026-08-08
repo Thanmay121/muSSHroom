@@ -1,12 +1,12 @@
 package main
 
 import (
-    "os"
+	"os"
 
-    server "github.com/homebrew-ec-foss/muSSHroom/internal/server"
+	server "github.com/homebrew-ec-foss/muSSHroom/internal/server"
 )
 
 func main() {
-    os.Setenv("FORCE_COLOR", "1")
-    server.Start()
+	os.Setenv("FORCE_COLOR", "1")
+	server.Start()
 }
