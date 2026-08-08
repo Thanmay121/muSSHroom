@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -88,7 +89,12 @@ type chatMsg struct {
 }
 
 // roomInviteMsg could be made to send a mesg to users when they are invited, placeholder for now
-type roomInviteMsg struct {
+type roomInviteMsg struct { //this is sent to the update function where it's then appended as the user's tabEntry
+	r *room
+}
+
+type roomDeleteMsg struct {
+	// to send msg to update so that it removes the room from the users' tabs and resets their activeTab to nil for global
 	r *room
 }
 
@@ -99,13 +105,13 @@ type tabEntry struct {
 	messages []chatMsg
 }
 
-	// broadcast sends a chatMsg to every connected user's program
-	func broadcast(msg chatMsg) {
-		sessionsMu.Lock()
-		defer sessionsMu.Unlock() //defer waits for the function to finish executing and then executes, even if there's an error
-		for _, s := range sessions {
-			s.program.Send(msg)
-		}
+// broadcast sends a chatMsg to every connected user's program
+func broadcast(msg chatMsg) {
+	sessionsMu.Lock()
+	defer sessionsMu.Unlock() //defer waits for the function to finish executing and then executes, even if there's an error
+	for _, s := range sessions {
+		s.program.Send(msg)
+	}
 }
 
 // broadcastToRoom sends a chatMsg to every member of a room
@@ -125,7 +131,7 @@ func userSysMsg(s *userSession, msg chatMsg) { //for when they use slash command
 func addSession(s *userSession) {
 	sessionsMu.Lock()
 	defer sessionsMu.Unlock()
-    sessions[s.username] = s
+	sessions[s.username] = s
 }
 
 // removeSession safely removes a user session when they disconnect
@@ -136,10 +142,10 @@ func removeSession(s *userSession) {
 }
 
 // createRoom makes a new room, adds members, and sends roomInviteMsg to each
-func createRoom(creator *userSession, targetUsernames []string) {
+func createRoom(rname string, creator *userSession, targetUsernames []string) {
 	roomsMu.Lock()
 	roomCounter++
-	id := fmt.Sprintf("room-number-%d", roomCounter)
+	id := rname
 	r := &room{
 		id:      id,
 		members: make(map[string]*userSession),
@@ -161,6 +167,23 @@ func createRoom(creator *userSession, targetUsernames []string) {
 		s.program.Send(roomInviteMsg{r: r})
 	}
 	r.mu.Unlock()
+}
+
+func deleteRoom(r *room) {
+	r.mu.Lock()
+	for _, s := range r.members {
+		s.program.Send(chatMsg{
+			roomID: "",
+			text:   fmt.Sprintf("🍄 chat room %s deleted", r.id),
+			system: true,
+		})
+		s.program.Send(roomDeleteMsg{r: r}) //sends this room struct to update to make changes in each of their tea.Models
+	}
+	r.mu.Unlock()
+
+	roomsMu.Lock()
+	defer roomsMu.Unlock()
+	delete(rooms, r.id) //deletes that room from the rooms map
 }
 
 func main() {
@@ -227,7 +250,6 @@ func myMiddleware() wish.Middleware {
 		p := tea.NewProgram(m, bubbletea.MakeOptions(s)...)          //create a new bubbletea program for this user session
 		sess.program = p
 
-
 		//remove session and broadcast disconnect message when user disconnects
 		go func() {
 			<-s.Context().Done()
@@ -267,10 +289,10 @@ type model struct {
 	messageInput  textinput.Model //input box for chat messages
 	tabs          []tabEntry      //amount of tabs
 	activeTab     int             //current tab
-	usernameStyle lipgloss.Style  
+	usernameStyle lipgloss.Style
 	width         int
 	height        int
-	err		   string          //error message for username taken
+	err           string //error message for username taken
 }
 
 func initialModel(sess *userSession, width, height int) model { //model state when user first enters in
@@ -334,6 +356,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.tabs = append(m.tabs, tabEntry{label: msg.r.id, r: msg.r, messages: []chatMsg{}})
 		return m, nil
 
+	case roomDeleteMsg:
+		for i, t := range m.tabs { //iterates through tabs to find the tabEntry to be deleted
+			if t.r == msg.r { //checks which tab contains the room being deleted
+				if m.activeTab == i {
+					m.activeTab = 0 //sends them back to global room if they're currently in the room being deleted
+				}
+				m.tabs = slices.Delete(m.tabs, i, i+1) //deletes the tabEntry from m.tabs
+			}
+
+		}
+		return m, nil
+
 	case tea.KeyPressMsg:
 		key := msg.String()
 
@@ -372,7 +406,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.usernameInput.Blur()
 				m.usernameInput.SetValue("")
 				sessions[username] = m.sess
-			
 
 				//broadcast join message to everyone
 				go broadcast(chatMsg{ //goroutine
@@ -391,11 +424,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// detecting slash commands
 				if strings.HasPrefix(text, "/") {
 					parts := strings.SplitN(text, " ", 2) //splits it into "/command" and "args"
-					command := parts[0]                    //name of command like 'help'
+					command := parts[0]                   //name of command like 'help'
 					args := ""
 
 					if len(parts) > 1 { //i.e the args to the commands like COLOR in /usercolor
 						args = parts[1]
+						args = strings.TrimSpace(args)
 					}
 
 					switch command { //to see which command is entered and send a user sysmsg to their session accordingly
@@ -407,13 +441,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							//this cases means that user is on the global room, sysmsg goes there
 							go userSysMsg(m.sess, chatMsg{
 								roomID: "",
-								text:   "🍄 available commands : /help /user /emoji /colors /quit /usercolor COLOR /room USER1 USER2...",
+								text:   "🍄 slash commands : /help /user /emoji /colors /quit /usercolor COLOR /room RNAME USER1 USER2... /deleteroom",
 								system: true})
 						} else {
 							//broadcast the sys message to user in their respective room
 							go userSysMsg(m.sess, chatMsg{
 								roomID: activeRoom.id,
-								text:   "🍄 available commands : /help /user /emoji /colors /quit /usercolor COLOR /room USER1 USER2...",
+								text:   "🍄 slash commands : /help /user /emoji /colors /quit /usercolor COLOR /room RNAME USER1 USER2... /deleteroom",
 								system: true})
 						}
 
@@ -515,7 +549,8 @@ WARNING: DO NOT CTRL+C`,
 							}
 							//creates room if args are valid users
 							targetUsernames := strings.Fields(args)
-							go createRoom(m.sess, targetUsernames)
+							roomname := targetUsernames[0]
+							go createRoom(roomname, m.sess, targetUsernames[1:])
 							m.messageInput.SetValue("")
 
 						} else { //incase it's inside a room we dont want them to create a room from here for neatness purpose lmao
@@ -524,6 +559,26 @@ WARNING: DO NOT CTRL+C`,
 								roomID: activeRoom.id,
 								text:   "🍄 use /room from the global tab to create a new room",
 								system: true})
+						}
+						m.messageInput.SetValue("")
+
+					case "/deleteroom":
+						activeRoom := m.tabs[m.activeTab].r
+						if activeRoom == nil {
+							//this cases means that user is on the global room
+							if args == "" { //no args given
+								go userSysMsg(m.sess, chatMsg{
+									roomID: "",
+									text:   "🍄 ainnoway you tryna delete GLOBAL room (p.s. only works inside a room)",
+									system: true})
+								m.messageInput.SetValue("")
+								return m, nil
+							}
+
+						} else { //incase it's inside a room we dont want them to create a room from here for neatness purpose lmao
+							//broadcast the sys message to user in their respective room
+							go deleteRoom(activeRoom)
+
 						}
 						m.messageInput.SetValue("")
 
