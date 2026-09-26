@@ -7,14 +7,14 @@ muSSHroom is a chat server directly accessible right in your terminal, with a co
 By building on the [Charm](https://charm.land/) stack (`wish` for the SSH server, `bubbletea` for the TUI, `lipgloss` for styling), the entire chat experience — private rooms, slash commands, colored system messages, emoji shortcodes — runs inside a standard terminal, rendered per-session as a proper interactive UI rather than a scroll of raw text. The result is a chat server that's trivial to connect.
 
 ## Running muSSHroom (skip to 4 if the server is already being hosted)
-**1. Clone the repo**
+### **1. Clone the repo**
 
 ```
 git clone https://github.com/homebrew-ec-foss/muSSHroom.git
 cd muSSHroom
 ```
 
-**2. Build it**
+### **2. Build it**
 
 You require Go 1.26.4 or newer.
 
@@ -22,7 +22,7 @@ You require Go 1.26.4 or newer.
 go build -o musshroom .
 ```
 
-**3. Run the server**
+### **3. Run the server**
 
 ```bash
 ./musshroom
@@ -48,7 +48,7 @@ to whatever port you want, then rebuild with `go build -o musshroom .`.
 
 Whichever route you pick, the only real requirement is that the chosen port is reachable from outside (open in the firewall / security group), since that's the only thing a client needs to reach.
 
-**4. Connect from the client side**
+### **4. Connect from the client side**
 
 Assuming it's already hosted on `<hostname>`:
 
@@ -85,6 +85,9 @@ Message text is scanned for `:shortcode:` patterns and expanded before rendering
 Because every session is its own Bubbletea program, most UI state is naturally isolated per-connection — the only shared, contended state is the session map and room membership, both behind mutexes. This keeps the concurrency surface small and auditable instead of threading locks through the whole message pipeline.
 
 ## Resources
+
+- Project Repository: <https://github.com/homebrew-ec-foss/muSSHroom>
+- [Charm](https://charm.land/) — `bubbletea`, `lipgloss`, `wish`, `bubbles`
 
 - Project Repository: <https://github.com/homebrew-ec-foss/muSSHroom>
 - [Charm](https://charm.land/) — `bubbletea`, `lipgloss`, `wish`, `bubbles`
