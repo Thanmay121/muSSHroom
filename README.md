@@ -88,6 +88,3 @@ Because every session is its own Bubbletea program, most UI state is naturally i
 
 - Project Repository: <https://github.com/homebrew-ec-foss/muSSHroom>
 - [Charm](https://charm.land/) — `bubbletea`, `lipgloss`, `wish`, `bubbles`
-
-- Project Repository: <https://github.com/homebrew-ec-foss/muSSHroom>
-- [Charm](https://charm.land/) — `bubbletea`, `lipgloss`, `wish`, `bubbles`
